@@ -8,7 +8,6 @@ import {
   onSnapshot,
   query,
   orderBy,
-  Timestamp,
 } from "firebase/firestore";
 
 import "../styles/Chat.css";

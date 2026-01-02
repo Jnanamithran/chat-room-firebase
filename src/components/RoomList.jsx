@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../firebase-config.jsx";
-import { collection, query, where, onSnapshot, getDocs, distinct } from "firebase/firestore";
+import { collection, onSnapshot, getDocs } from "firebase/firestore";
 import "../styles/RoomList.css";
 
 export const RoomList = ({ onSelectRoom, onCreateRoom }) => {
@@ -8,6 +8,7 @@ export const RoomList = ({ onSelectRoom, onCreateRoom }) => {
   const [loading, setLoading] = useState(true);
   const [newRoom, setNewRoom] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     const fetchRooms = async () => {
@@ -32,13 +33,18 @@ export const RoomList = ({ onSelectRoom, onCreateRoom }) => {
 
     fetchRooms();
 
-    // Real-time listener for new messages in any room
+    // Real-time listener for new messages in any room - optimized with debounce
     const messagesRef = collection(db, "messages");
+    let timeoutId;
     const unsubscribe = onSnapshot(messagesRef, () => {
-      fetchRooms();
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(fetchRooms, 1000);
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(timeoutId);
+      unsubscribe();
+    };
   }, []);
 
   const handleCreateRoom = (e) => {
@@ -47,15 +53,23 @@ export const RoomList = ({ onSelectRoom, onCreateRoom }) => {
       onCreateRoom(newRoom.trim());
       setNewRoom("");
       setShowForm(false);
+      setSearchTerm("");
     }
   };
+
+  const filteredRooms = rooms.filter((room) =>
+    room.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="room-list">
       <div className="room-list-header">
-        <h2>Chat Rooms</h2>
+        <div className="header-content">
+          <h2>💬 Chat Rooms</h2>
+          <p className="room-count">{rooms.length} rooms</p>
+        </div>
         <button className="create-btn" onClick={() => setShowForm(!showForm)}>
-          {showForm ? "✕" : "+ New"}
+          {showForm ? "✕ Cancel" : "+ New Room"}
         </button>
       </div>
 
@@ -65,33 +79,65 @@ export const RoomList = ({ onSelectRoom, onCreateRoom }) => {
             type="text"
             value={newRoom}
             onChange={(e) => setNewRoom(e.target.value)}
-            placeholder="Room name..."
+            placeholder="Enter room name..."
             maxLength="30"
             autoFocus
+            required
           />
           <button type="submit">Create</button>
         </form>
       )}
 
+      {rooms.length > 0 && !showForm && (
+        <div className="search-box">
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="🔍 Search rooms..."
+            className="search-input"
+          />
+        </div>
+      )}
+
       <div className="rooms-container">
         {loading ? (
-          <div className="loading">Loading rooms...</div>
+          <div className="loading">
+            <div className="loader-spinner"></div>
+            <p>Loading chat rooms...</p>
+          </div>
         ) : rooms.length === 0 ? (
           <div className="no-rooms">
-            <p>No rooms yet.</p>
-            <p className="hint">Create one to get started!</p>
+            <div className="no-rooms-icon">
+              <img 
+                src="https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=200&h=200&fit=crop"
+                alt="Start chatting"
+                loading="lazy"
+              />
+            </div>
+            <h3>No rooms yet</h3>
+            <p>Create your first room to start chatting!</p>
+          </div>
+        ) : filteredRooms.length === 0 ? (
+          <div className="no-results">
+            <p>No rooms match &#34;{searchTerm}&#34;</p>
           </div>
         ) : (
-          rooms.map((room) => (
-            <button
-              key={room}
-              className="room-item"
-              onClick={() => onSelectRoom(room)}
-            >
-              <span className="room-icon">#</span>
-              <span className="room-name">{room}</span>
-            </button>
-          ))
+          <div className="rooms-grid">
+            {filteredRooms.map((room, index) => (
+              <button
+                key={room}
+                className="room-item"
+                onClick={() => onSelectRoom(room)}
+                style={{ animationDelay: `${index * 0.05}s` }}
+              >
+                <div className="room-badge">{filteredRooms.indexOf(room) + 1}</div>
+                <span className="room-icon">#</span>
+                <span className="room-name">{room}</span>
+                <span className="room-arrow">→</span>
+              </button>
+            ))}
+          </div>
         )}
       </div>
     </div>
